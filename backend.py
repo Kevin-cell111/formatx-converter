@@ -13,11 +13,14 @@ import uuid
 import io
 from pathlib import Path
 
-PORT = 8890
-UPLOAD_DIR = Path("D:/converter-site/uploads")
+PORT = int(os.environ.get("PORT", 8890))
+BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-F_PYTHON = "F:/python3.13.0/python.exe"
-WORKER = "D:/converter-site/engine_worker.py"
+IS_WINDOWS = sys.platform == "win32"
+F_PYTHON = "F:/python3.13.0/python.exe" if IS_WINDOWS else sys.executable
+WORKER = str(BASE_DIR / "engine_worker.py")
+F_PY_OK_OS = os.path.exists(F_PYTHON) or not IS_WINDOWS
 
 # Fix Windows encoding (safe)
 if sys.platform == "win32":
@@ -38,19 +41,25 @@ def find(*paths):
         if os.path.exists(p): return p
     return None
 
-SOFFICE = find("C:/Program Files/LibreOffice/program/soffice.com")
-EBOOK = find("C:/Program Files/Calibre2/ebook-convert.exe")
-INKSCAPE = find("F:/Bin/inkscape.com", "C:/Program Files/Inkscape/bin/inkscape.com")
-FFMPEG = find("/c/msys64/mingw64/bin/ffmpeg.exe", "C:/msys64/mingw64/bin/ffmpeg.exe")
-F_PY_OK = os.path.exists(F_PYTHON) and os.path.exists(WORKER)
-
+SOFFICE = find("C:/Program Files/LibreOffice/program/soffice.com") or shutil.which("soffice")
+EBOOK = find("C:/Program Files/Calibre2/ebook-convert.exe") or shutil.which("ebook-convert")
+INKSCAPE = find("F:/Bin/inkscape.com", "C:/Program Files/Inkscape/bin/inkscape.com") or shutil.which("inkscape")
+FFMPEG = find("/c/msys64/mingw64/bin/ffmpeg.exe", "C:/msys64/mingw64/bin/ffmpeg.exe") or shutil.which("ffmpeg")
 def has_worker_engine(name):
-    if not F_PY_OK: return False
-    try:
-        r = subprocess.run([F_PYTHON, "-c", f"__import__('{name}')"],
-                          capture_output=True, timeout=10)
-        return r.returncode == 0
-    except: return False
+    if IS_WINDOWS:
+        if not os.path.exists(F_PYTHON): return False
+        try:
+            r = subprocess.run([F_PYTHON, "-c", f"__import__('{name}')"],
+                              capture_output=True, timeout=10)
+            return r.returncode == 0
+        except: return False
+    else:
+        # Linux: try direct import
+        try:
+            __import__(name)
+            return True
+        except:
+            return False
 
 def get_engines():
     return {
@@ -94,11 +103,18 @@ MIME_MAP = {
 }
 
 def call_worker(engine, input_path, output_path):
-    """Call F:Python engine_worker.py"""
-    r = subprocess.run([F_PYTHON, WORKER, engine, input_path, output_path],
-                       capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:
-        raise Exception(r.stderr or r.stdout or f"{engine} failed")
+    """Call engine worker (subprocess on Windows, direct import on Linux)"""
+    if IS_WINDOWS:
+        r = subprocess.run([F_PYTHON, WORKER, engine, input_path, output_path],
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:
+            raise Exception(r.stderr or r.stdout or f"{engine} failed")
+    else:
+        # Linux: use the same python process for worker
+        r = subprocess.run([sys.executable, WORKER, engine, input_path, output_path],
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:
+            raise Exception(r.stderr or r.stdout or f"{engine} failed")
     return output_path
 
 def call_soffice(input_path, output_dir, fmt="pdf"):
