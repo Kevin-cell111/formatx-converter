@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: formatx-backend
+    runtime: image
+    repo: https://github.com/Kevin-cell111/formatx-converter
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: "10000"
+    healthCheckPath: /api/health
