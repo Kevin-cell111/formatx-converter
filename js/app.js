@@ -551,7 +551,10 @@ function downloadResult(data, filename, ext) {
 // ============================================================
 //  SERVER-SIDE CONVERSION (Backend API)
 // ============================================================
-const BACKEND_URL = 'http://localhost:8890';
+// Auto-detect backend: local dev or same-origin production
+const BACKEND_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:8890'
+  : `${location.protocol}//${location.hostname}:8890`;
 let backendAvailable = null; // null=unknown, true/false
 
 async function checkBackend() {

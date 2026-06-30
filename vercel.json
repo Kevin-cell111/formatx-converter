@@ -1,0 +1,7 @@
+{
+  "name": "formatx-converter",
+  "version": 1,
+  "buildCommand": null,
+  "outputDirectory": ".",
+  "cleanUrls": true
+}
